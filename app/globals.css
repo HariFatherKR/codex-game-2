@@ -1,0 +1,210 @@
+:root {
+  color-scheme: dark;
+  font-family: "Inter", system-ui, sans-serif;
+  --bg: #0f1115;
+  --panel: #1b1f27;
+  --accent: #5cc8ff;
+  --accent-2: #ffd166;
+  --tile-size: 52px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: #f5f7fb;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  padding: 24px;
+  gap: 24px;
+}
+
+.sidebar {
+  width: 280px;
+  background: var(--panel);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.main {
+  flex: 1;
+  background: var(--panel);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.nav-button {
+  background: transparent;
+  border: 1px solid #2b3240;
+  padding: 10px 12px;
+  border-radius: 10px;
+  text-align: left;
+  transition: border 0.2s ease;
+}
+
+.nav-button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.card {
+  background: #151821;
+  border-radius: 14px;
+  padding: 16px;
+  border: 1px solid #2a3240;
+}
+
+.grid {
+  display: grid;
+  gap: 6px;
+  justify-content: start;
+}
+
+.tile {
+  width: var(--tile-size);
+  height: var(--tile-size);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  transition: transform 0.2s ease;
+  position: relative;
+}
+
+.tile.selected {
+  outline: 3px solid var(--accent);
+  transform: scale(1.04);
+}
+
+.tile.special {
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.3);
+}
+
+.tile.R { background: #ff6b6b; }
+.tile.G { background: #5ad7a0; }
+.tile.B { background: #4d96ff; }
+.tile.Y { background: #ffd166; color: #1b1f27; }
+.tile.P { background: #cdb4ff; color: #1b1f27; }
+
+.hud {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hud-item {
+  background: #10131a;
+  border-radius: 10px;
+  padding: 10px 12px;
+  border: 1px solid #2a3240;
+  min-width: 140px;
+}
+
+.objective {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(9, 10, 15, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+}
+
+.modal-card {
+  background: #141822;
+  border-radius: 16px;
+  padding: 24px;
+  width: min(520px, 90vw);
+  border: 1px solid #2a3240;
+}
+
+.input, select, textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #2a3240;
+  background: #0f1218;
+  color: #fff;
+  font: inherit;
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.tutorial-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 8, 12, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+}
+
+.tutorial-card {
+  background: #0f1218;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid #2a3240;
+  width: min(320px, 80%);
+  text-align: center;
+}
+
+.highlight {
+  box-shadow: 0 0 0 3px var(--accent);
+  border-radius: 8px;
+}
+
+.editor-grid .tile {
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  :root {
+    --tile-size: 42px;
+  }
+}
