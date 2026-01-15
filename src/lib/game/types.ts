@@ -9,9 +9,18 @@ export type Board = Tile[][];
 
 export type GameStatus = "playing" | "clear" | "fail";
 
+export type GamePhase = "idle" | "swapping" | "exploding" | "gravity" | "spawning";
+
+export type CellPosition = {
+  row: number;
+  col: number;
+};
+
 export type GameState = {
   board: Board;
   score: number;
   movesLeft: number;
   status: GameStatus;
+  phase: GamePhase;
+  animatingCells?: CellPosition[];
 };
