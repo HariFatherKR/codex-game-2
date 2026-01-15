@@ -88,16 +88,31 @@ button {
   background: #111827;
   padding: 12px;
   border-radius: 16px;
-  display: grid;
-  grid-template-columns: repeat(8, 48px);
-  grid-template-rows: repeat(8, 48px);
-  gap: 6px;
+  display: flex;
   justify-content: center;
+  --tile-size: 48px;
+  --tile-gap: 6px;
+  --board-size: 8;
+}
+
+.board-inner {
+  position: relative;
+  width: calc(
+    var(--board-size) * var(--tile-size) +
+      (var(--board-size) - 1) * var(--tile-gap)
+  );
+  height: calc(
+    var(--board-size) * var(--tile-size) +
+      (var(--board-size) - 1) * var(--tile-gap)
+  );
 }
 
 .tile {
-  width: 48px;
-  height: 48px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--tile-size);
+  height: var(--tile-size);
   border-radius: 12px;
   border: 2px solid transparent;
   display: flex;
@@ -105,11 +120,31 @@ button {
   justify-content: center;
   color: #fff;
   font-weight: 700;
+  --tile-x: calc(var(--tile-col) * (var(--tile-size) + var(--tile-gap)));
+  --tile-y: calc(var(--tile-row) * (var(--tile-size) + var(--tile-gap)));
+  transform: translate(var(--tile-x), var(--tile-y));
+  transition: transform 0.18s ease-in-out;
 }
 
 .tile.selected {
   border-color: #f59e0b;
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.5);
+}
+
+.tile.exploding {
+  transform: translate(var(--tile-x), var(--tile-y)) scale(0.2);
+  opacity: 0;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.board.phase-gravity .tile {
+  transition-duration: 0.25s;
+  transition-property: transform;
+}
+
+.board.phase-spawning .tile {
+  transition-duration: 0.25s;
+  transition-property: transform, opacity;
 }
 
 .tile.R {
@@ -183,12 +218,11 @@ button {
   }
 
   .board {
-    grid-template-columns: repeat(8, 40px);
-    grid-template-rows: repeat(8, 40px);
+    --tile-size: 40px;
   }
 
   .tile {
-    width: 40px;
-    height: 40px;
+    width: var(--tile-size);
+    height: var(--tile-size);
   }
 }
