@@ -10,8 +10,12 @@ import {
   resolveBoard,
   swapTiles
 } from "@/lib/game/logic";
+import TileView from "@/app/TileView";
 
 const STORAGE_KEY = "codex-game-progress";
+const BOARD_GAP = 6;
+const MIN_TOUCH_SIZE = 44;
+const MAX_TILE_SIZE = 56;
 
 type Progress = {
   unlockedLevelIds: string[];
@@ -61,10 +65,28 @@ export default function Home() {
   const [activeLevel, setActiveLevel] = useState<Level | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [selected, setSelected] = useState<Position | null>(null);
+  const [screenWidth, setScreenWidth] = useState(0);
 
   useEffect(() => {
     const stored = loadProgress();
     setProgress(stored);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const updateWidth = () => {
+      setScreenWidth(window.innerWidth);
+    };
+
+    updateWidth();
+    window.addEventListener("resize", updateWidth);
+
+    return () => {
+      window.removeEventListener("resize", updateWidth);
+    };
   }, []);
 
   const unlockedLevels = useMemo(() => {
@@ -203,6 +225,21 @@ export default function Home() {
     }
   }
 
+  const boardColumns = gameState?.board[0]?.length ?? 8;
+  const boardRows = gameState?.board.length ?? 8;
+  const tileSize = useMemo(() => {
+    if (!screenWidth) {
+      return 48;
+    }
+
+    const computed = Math.min(
+      Math.floor(screenWidth / boardColumns) - BOARD_GAP,
+      MAX_TILE_SIZE
+    );
+
+    return Math.max(computed, MIN_TOUCH_SIZE);
+  }, [boardColumns, screenWidth]);
+
   return (
     <main>
       <div className="app">
@@ -254,22 +291,32 @@ export default function Home() {
             </div>
 
             <div>
-              <div className="board">
+              <div
+                className="board"
+                style={{
+                  gridTemplateColumns: `repeat(${boardColumns}, ${tileSize}px)`,
+                  gridTemplateRows: `repeat(${boardRows}, ${tileSize}px)`,
+                  gap: BOARD_GAP
+                }}
+              >
                 {gameState.board.map((row, rowIndex) =>
                   row.map((tile, colIndex) => {
                     const isSelected =
                       selected?.row === rowIndex && selected?.col === colIndex;
-                    const className = `tile ${tile.color} ${
-                      isSelected ? "selected" : ""
-                    }`;
                     return (
                       <button
                         key={tile.id}
                         type="button"
-                        className={className}
+                        className="tile-button"
                         onClick={() => handleTileClick(rowIndex, colIndex)}
                         aria-label={`Tile ${tile.color}`}
-                      />
+                      >
+                        <TileView
+                          color={tile.color}
+                          size={tileSize}
+                          selected={isSelected}
+                        />
+                      </button>
                     );
                   })
                 )}
