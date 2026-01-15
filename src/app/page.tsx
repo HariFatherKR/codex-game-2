@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { levels, type Level } from "@/data/levels";
-import type { Board, GameState } from "@/lib/game/types";
+import type { Board, GameState, TileColor } from "@/lib/game/types";
 import {
   checkClearCondition,
   createInitialBoard,
@@ -12,6 +12,21 @@ import {
 } from "@/lib/game/logic";
 
 const STORAGE_KEY = "codex-game-progress";
+const TILE_GAP = 6;
+const MIN_TILE_SIZE = 44;
+const MAX_TILE_SIZE = 56;
+
+const BLOCK_SPRITE = {
+  image: "/blocks.png",
+  tileSize: 64,
+  map: {
+    R: { x: 0, y: 0 },
+    G: { x: 64, y: 0 },
+    B: { x: 128, y: 0 },
+    Y: { x: 192, y: 0 },
+    P: { x: 256, y: 0 }
+  }
+} as const;
 
 type Progress = {
   unlockedLevelIds: string[];
@@ -21,6 +36,12 @@ type Progress = {
 type Position = {
   row: number;
   col: number;
+};
+
+type TileViewProps = {
+  color: TileColor;
+  size: number;
+  selected?: boolean;
 };
 
 const defaultProgress: Progress = {
@@ -56,15 +77,52 @@ function loadProgress(): Progress {
   }
 }
 
+function TileView({ color, size, selected }: TileViewProps) {
+  const { x, y } = BLOCK_SPRITE.map[color];
+  const scale = size / BLOCK_SPRITE.tileSize;
+  const backgroundWidth = BLOCK_SPRITE.tileSize * 5 * scale;
+  const backgroundHeight = BLOCK_SPRITE.tileSize * scale;
+
+  return (
+    <div
+      className={`tile ${selected ? "selected" : ""}`}
+      style={{
+        width: size,
+        height: size,
+        backgroundImage: `url(${BLOCK_SPRITE.image})`,
+        backgroundRepeat: "no-repeat",
+        backgroundSize: `${backgroundWidth}px ${backgroundHeight}px`,
+        backgroundPosition: `-${x * scale}px -${y * scale}px`
+      }}
+    />
+  );
+}
+
 export default function Home() {
   const [progress, setProgress] = useState<Progress>(defaultProgress);
   const [activeLevel, setActiveLevel] = useState<Level | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [selected, setSelected] = useState<Position | null>(null);
+  const [screenWidth, setScreenWidth] = useState(() => {
+    if (typeof window === "undefined") {
+      return 360;
+    }
+
+    return window.innerWidth;
+  });
 
   useEffect(() => {
     const stored = loadProgress();
     setProgress(stored);
+  }, []);
+
+  useEffect(() => {
+    function handleResize() {
+      setScreenWidth(window.innerWidth);
+    }
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   const unlockedLevels = useMemo(() => {
@@ -80,6 +138,14 @@ export default function Home() {
     activeLevel && gameState
       ? gameState.score + gameState.movesLeft * 50
       : 0;
+
+  const boardCols = gameState?.board[0]?.length ?? 8;
+  const boardRows = gameState?.board.length ?? 8;
+
+  const tileSize = useMemo(() => {
+    const baseSize = Math.floor(screenWidth / boardCols) - TILE_GAP;
+    return Math.max(Math.min(baseSize, MAX_TILE_SIZE), MIN_TILE_SIZE);
+  }, [boardCols, screenWidth]);
 
   function persistProgress(next: Progress) {
     setProgress(next);
@@ -254,22 +320,36 @@ export default function Home() {
             </div>
 
             <div>
-              <div className="board">
+              <div
+                className="board"
+                style={{
+                  gridTemplateColumns: `repeat(${boardCols}, ${tileSize}px)`,
+                  gridTemplateRows: `repeat(${boardRows}, ${tileSize}px)`,
+                  gap: TILE_GAP
+                }}
+              >
                 {gameState.board.map((row, rowIndex) =>
                   row.map((tile, colIndex) => {
                     const isSelected =
                       selected?.row === rowIndex && selected?.col === colIndex;
-                    const className = `tile ${tile.color} ${
-                      isSelected ? "selected" : ""
-                    }`;
                     return (
-                      <button
+                      <div
                         key={tile.id}
-                        type="button"
-                        className={className}
+                        className="tile-button"
+                        role="button"
+                        tabIndex={0}
                         onClick={() => handleTileClick(rowIndex, colIndex)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            handleTileClick(rowIndex, colIndex);
+                          }
+                        }}
                         aria-label={`Tile ${tile.color}`}
-                      />
+                        style={{ width: tileSize, height: tileSize }}
+                      >
+                        <TileView color={tile.color} size={tileSize} selected={isSelected} />
+                      </div>
                     );
                   })
                 )}
