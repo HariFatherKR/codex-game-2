@@ -89,47 +89,35 @@ button {
   padding: 12px;
   border-radius: 16px;
   display: grid;
-  grid-template-columns: repeat(8, 48px);
-  grid-template-rows: repeat(8, 48px);
+  grid-template-columns: repeat(var(--board-cols, 8), var(--tile-size, 48px));
+  grid-template-rows: repeat(var(--board-rows, 8), var(--tile-size, 48px));
   gap: 6px;
   justify-content: center;
 }
 
 .tile {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  border: 2px solid transparent;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-weight: 700;
+  border-radius: 10px;
+  background-color: #f4f4f4;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.15);
+  transition: transform 0.12s ease-out, outline-color 0.12s ease-out;
 }
 
 .tile.selected {
-  border-color: #f59e0b;
-  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.5);
+  outline: 3px solid #4f9cff;
+  transform: scale(1.05);
 }
 
-.tile.R {
-  background: #ef4444;
+.tile-button {
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: inline-flex;
 }
 
-.tile.G {
-  background: #22c55e;
-}
-
-.tile.B {
-  background: #3b82f6;
-}
-
-.tile.Y {
-  background: #f59e0b;
-}
-
-.tile.P {
-  background: #a855f7;
+.tile-button:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
 }
 
 .result-modal {
@@ -180,15 +168,5 @@ button {
 @media (max-width: 860px) {
   .game-panel {
     grid-template-columns: 1fr;
-  }
-
-  .board {
-    grid-template-columns: repeat(8, 40px);
-    grid-template-rows: repeat(8, 40px);
-  }
-
-  .tile {
-    width: 40px;
-    height: 40px;
   }
 }
