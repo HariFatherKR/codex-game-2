@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { levels, type Level } from "@/data/levels";
 import type { Board, GameState } from "@/lib/game/types";
+import type { TileColor } from "@/lib/game/types";
 import {
   checkClearCondition,
   createInitialBoard,
@@ -12,6 +13,23 @@ import {
 } from "@/lib/game/logic";
 
 const STORAGE_KEY = "codex-game-progress";
+const BOARD_COLUMNS = 8;
+const BOARD_ROWS = 8;
+const TILE_GAP = 6;
+const MIN_TILE_SIZE = 44;
+const MAX_TILE_SIZE = 56;
+
+const BLOCK_SPRITE = {
+  image: "/blocks.png",
+  tileSize: 64,
+  map: {
+    R: { x: 0, y: 0 },
+    G: { x: 64, y: 0 },
+    B: { x: 128, y: 0 },
+    Y: { x: 192, y: 0 },
+    P: { x: 256, y: 0 }
+  }
+} as const;
 
 type Progress = {
   unlockedLevelIds: string[];
@@ -21,6 +39,12 @@ type Progress = {
 type Position = {
   row: number;
   col: number;
+};
+
+type TileViewProps = {
+  color: TileColor;
+  size: number;
+  selected?: boolean;
 };
 
 const defaultProgress: Progress = {
@@ -61,11 +85,55 @@ export default function Home() {
   const [activeLevel, setActiveLevel] = useState<Level | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [selected, setSelected] = useState<Position | null>(null);
+  const [screenWidth, setScreenWidth] = useState(0);
 
   useEffect(() => {
     const stored = loadProgress();
     setProgress(stored);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    function handleResize() {
+      setScreenWidth(window.innerWidth);
+    }
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  function TileView({ color, size, selected = false }: TileViewProps) {
+    const { x, y } = BLOCK_SPRITE.map[color];
+    const scale = size / BLOCK_SPRITE.tileSize;
+
+    return (
+      <div
+        className={`tile ${selected ? "selected" : ""}`}
+        style={{
+          width: size,
+          height: size,
+          backgroundImage: `url(${BLOCK_SPRITE.image})`,
+          backgroundRepeat: "no-repeat",
+          backgroundSize: `${BLOCK_SPRITE.tileSize * 5 * scale}px ${
+            BLOCK_SPRITE.tileSize * scale
+          }px`,
+          backgroundPosition: `-${x * scale}px -${y * scale}px`
+        }}
+      />
+    );
+  }
+
+  const boardColumns = gameState?.board[0]?.length ?? BOARD_COLUMNS;
+  const boardRows = gameState?.board.length ?? BOARD_ROWS;
+  const tileSize = useMemo(() => {
+    const width = screenWidth || 1024;
+    const candidate = Math.min(Math.floor(width / boardColumns) - TILE_GAP, MAX_TILE_SIZE);
+    return Math.max(candidate, MIN_TILE_SIZE);
+  }, [boardColumns, screenWidth]);
 
   const unlockedLevels = useMemo(() => {
     return new Set(progress.unlockedLevelIds);
@@ -254,22 +322,28 @@ export default function Home() {
             </div>
 
             <div>
-              <div className="board">
+              <div
+                className="board"
+                style={{
+                  gridTemplateColumns: `repeat(${boardColumns}, ${tileSize}px)`,
+                  gridTemplateRows: `repeat(${boardRows}, ${tileSize}px)`,
+                  gap: `${TILE_GAP}px`
+                }}
+              >
                 {gameState.board.map((row, rowIndex) =>
                   row.map((tile, colIndex) => {
                     const isSelected =
                       selected?.row === rowIndex && selected?.col === colIndex;
-                    const className = `tile ${tile.color} ${
-                      isSelected ? "selected" : ""
-                    }`;
                     return (
                       <button
                         key={tile.id}
                         type="button"
-                        className={className}
+                        className="tile-button"
                         onClick={() => handleTileClick(rowIndex, colIndex)}
                         aria-label={`Tile ${tile.color}`}
-                      />
+                      >
+                        <TileView color={tile.color} size={tileSize} selected={isSelected} />
+                      </button>
                     );
                   })
                 )}
