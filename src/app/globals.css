@@ -88,16 +88,18 @@ button {
   background: #111827;
   padding: 12px;
   border-radius: 16px;
-  display: grid;
-  grid-template-columns: repeat(8, 48px);
-  grid-template-rows: repeat(8, 48px);
-  gap: 6px;
-  justify-content: center;
+  position: relative;
+  --tile-size: 48px;
+  --tile-gap: 6px;
+  --tile-step: calc(var(--tile-size) + var(--tile-gap));
+  width: calc(var(--tile-step) * 8 - var(--tile-gap));
+  height: calc(var(--tile-step) * 8 - var(--tile-gap));
 }
 
 .tile {
-  width: 48px;
-  height: 48px;
+  position: absolute;
+  width: var(--tile-size);
+  height: var(--tile-size);
   border-radius: 12px;
   border: 2px solid transparent;
   display: flex;
@@ -105,11 +107,36 @@ button {
   justify-content: center;
   color: #fff;
   font-weight: 700;
+  top: calc(var(--row) * var(--tile-step));
+  left: calc(var(--col) * var(--tile-step));
+  opacity: var(--tile-opacity, 1);
+  transform: translate(
+      calc(var(--offset-x, 0) * var(--tile-step)),
+      calc(var(--offset-y, 0) * var(--tile-step))
+    )
+    scale(var(--tile-scale, 1));
+  transition: transform var(--move-duration, 0ms) ease-in-out,
+    opacity var(--fade-duration, 0ms) ease;
 }
 
 .tile.selected {
   border-color: #f59e0b;
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.5);
+}
+
+.tile.exploding {
+  --tile-scale: 0.2;
+  --tile-opacity: 0;
+  --move-duration: 200ms;
+  --fade-duration: 200ms;
+}
+
+.tile.pending-spawn {
+  --tile-opacity: 0;
+}
+
+.tile.spawning {
+  --tile-opacity: 0;
 }
 
 .tile.R {
@@ -183,12 +210,11 @@ button {
   }
 
   .board {
-    grid-template-columns: repeat(8, 40px);
-    grid-template-rows: repeat(8, 40px);
+    --tile-size: 40px;
   }
 
   .tile {
-    width: 40px;
-    height: 40px;
+    width: var(--tile-size);
+    height: var(--tile-size);
   }
 }

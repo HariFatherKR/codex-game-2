@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { levels, type Level } from "@/data/levels";
-import type { Board, GameState } from "@/lib/game/types";
+import type { Board, CellPosition, GamePhase, GameState, Tile } from "@/lib/game/types";
 import {
   checkClearCondition,
   createInitialBoard,
@@ -22,6 +22,37 @@ type Position = {
   row: number;
   col: number;
 };
+
+type Offset = {
+  x: number;
+  y: number;
+};
+
+type TileOffsets = Record<string, Offset>;
+
+type SwapPair = {
+  from: Position;
+  to: Position;
+};
+
+type TileViewProps = {
+  tile: Tile;
+  row: number;
+  col: number;
+  phase: GamePhase;
+  isExploding: boolean;
+  isSelected: boolean;
+  isPendingSpawn: boolean;
+  isSpawning: boolean;
+  offset?: Offset;
+  onClick: () => void;
+  isDisabled: boolean;
+};
+
+const SWAP_DURATION = 180;
+const EXPLOSION_DURATION = 200;
+const GRAVITY_DURATION = 250;
+const SPAWN_DURATION = 250;
 
 const defaultProgress: Progress = {
   unlockedLevelIds: [levels[0]?.id ?? ""].filter(Boolean),
@@ -56,11 +87,79 @@ function loadProgress(): Progress {
   }
 }
 
+function mapPositions(board: Board): Record<string, Position> {
+  const positions: Record<string, Position> = {};
+  board.forEach((row, rowIndex) => {
+    row.forEach((tile, colIndex) => {
+      positions[tile.id] = { row: rowIndex, col: colIndex };
+    });
+  });
+  return positions;
+}
+
+function TileView({
+  tile,
+  row,
+  col,
+  phase,
+  isExploding,
+  isSelected,
+  isPendingSpawn,
+  isSpawning,
+  offset,
+  onClick,
+  isDisabled
+}: TileViewProps) {
+  const moveDuration =
+    phase === "swapping"
+      ? `${SWAP_DURATION}ms`
+      : phase === "gravity" || phase === "spawning"
+        ? `${GRAVITY_DURATION}ms`
+        : "0ms";
+
+  const style = {
+    "--row": row,
+    "--col": col,
+    "--offset-x": offset?.x ?? 0,
+    "--offset-y": offset?.y ?? 0,
+    "--move-duration": moveDuration,
+    "--fade-duration": phase === "spawning" ? `${SPAWN_DURATION}ms` : "0ms"
+  } as CSSProperties;
+
+  const className = [
+    "tile",
+    tile.color,
+    isSelected ? "selected" : "",
+    isExploding ? "exploding" : "",
+    isPendingSpawn ? "pending-spawn" : "",
+    isSpawning ? "spawning" : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <button
+      type="button"
+      className={className}
+      style={style}
+      onClick={onClick}
+      aria-label={`Tile ${tile.color}`}
+      disabled={isDisabled}
+    />
+  );
+}
+
 export default function Home() {
   const [progress, setProgress] = useState<Progress>(defaultProgress);
   const [activeLevel, setActiveLevel] = useState<Level | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [selected, setSelected] = useState<Position | null>(null);
+  const [swapPair, setSwapPair] = useState<SwapPair | null>(null);
+  const [tileOffsets, setTileOffsets] = useState<TileOffsets>({});
+  const [explodingCells, setExplodingCells] = useState<Set<string>>(new Set());
+  const [previousPositions, setPreviousPositions] = useState<Record<string, Position>>({});
+  const [newTileIds, setNewTileIds] = useState<Set<string>>(new Set());
+  const [isSpawningStart, setIsSpawningStart] = useState(false);
 
   useEffect(() => {
     const stored = loadProgress();
@@ -94,17 +193,26 @@ export default function Home() {
       board,
       score: 0,
       movesLeft: level.movesLimit,
-      status: "playing"
+      status: "playing",
+      phase: "idle",
+      animatingCells: []
     };
     setActiveLevel(level);
     setGameState(nextState);
     setSelected(null);
+    setSwapPair(null);
+    setTileOffsets({});
+    setExplodingCells(new Set());
+    setPreviousPositions({});
+    setNewTileIds(new Set());
+    setIsSpawningStart(false);
   }
 
   function handleBackToLevels() {
     setActiveLevel(null);
     setGameState(null);
     setSelected(null);
+    setSwapPair(null);
   }
 
   function handleRetry() {
@@ -140,7 +248,12 @@ export default function Home() {
   }
 
   function handleTileClick(row: number, col: number) {
-    if (!gameState || gameState.status !== "playing" || !activeLevel) {
+    if (
+      !gameState ||
+      gameState.status !== "playing" ||
+      gameState.phase !== "idle" ||
+      !activeLevel
+    ) {
       return;
     }
 
@@ -168,40 +281,247 @@ export default function Home() {
       return;
     }
 
-    let workingBoard: Board = swapped;
-    let totalMatched = 0;
-    let didResolve = true;
+    const fromTile = gameState.board[selected.row]?.[selected.col];
+    const toTile = gameState.board[nextPosition.row]?.[nextPosition.col];
+    if (!fromTile || !toTile) {
+      return;
+    }
 
-    while (didResolve) {
-      const result = resolveBoard(workingBoard);
-      if (!result.didMatch) {
-        didResolve = false;
-      } else {
-        totalMatched += result.matchedCount;
-        workingBoard = result.board;
+    setSwapPair({ from: selected, to: nextPosition });
+    setTileOffsets({
+      [fromTile.id]: {
+        x: nextPosition.col - selected.col,
+        y: nextPosition.row - selected.row
+      },
+      [toTile.id]: {
+        x: selected.col - nextPosition.col,
+        y: selected.row - nextPosition.row
       }
-    }
-
-    const nextScore = gameState.score + totalMatched * 10;
-    const nextMoves = gameState.movesLeft - 1;
-    const cleared = checkClearCondition(nextScore, activeLevel);
-    const failed = !cleared && nextMoves <= 0;
-    const nextStatus = cleared ? "clear" : failed ? "fail" : "playing";
-
-    const nextState: GameState = {
-      board: workingBoard,
-      score: nextScore,
-      movesLeft: nextMoves,
-      status: nextStatus
-    };
-
-    setGameState(nextState);
+    });
+    setGameState((prev) =>
+      prev
+        ? {
+            ...prev,
+            phase: "swapping"
+          }
+        : prev
+    );
     setSelected(null);
-
-    if (nextStatus === "clear") {
-      updateProgressOnClear(activeLevel, nextScore + nextMoves * 50);
-    }
   }
+
+  useEffect(() => {
+    if (!gameState || gameState.phase !== "swapping" || !swapPair) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setGameState((prev) => {
+        if (!prev || prev.phase !== "swapping") {
+          return prev;
+        }
+        const swappedBoard = swapTiles(prev.board, swapPair.from, swapPair.to);
+        return {
+          ...prev,
+          board: swappedBoard,
+          movesLeft: prev.movesLeft - 1,
+          phase: "exploding"
+        };
+      });
+      setSwapPair(null);
+      setTileOffsets({});
+    }, SWAP_DURATION);
+
+    return () => clearTimeout(timer);
+  }, [gameState?.phase, swapPair]);
+
+  useEffect(() => {
+    if (!gameState || gameState.phase !== "exploding") {
+      return;
+    }
+
+    const matches = findMatches(gameState.board);
+    if (matches.size === 0) {
+      setExplodingCells(new Set());
+      setGameState((prev) =>
+        prev
+          ? {
+              ...prev,
+              phase: "idle",
+              animatingCells: []
+            }
+          : prev
+      );
+      return;
+    }
+
+    const cellList: CellPosition[] = [];
+    matches.forEach((key) => {
+      const [rowText, colText] = key.split("-");
+      const row = Number(rowText);
+      const col = Number(colText);
+      if (Number.isInteger(row) && Number.isInteger(col)) {
+        cellList.push({ row, col });
+      }
+    });
+
+    setExplodingCells(matches);
+    setGameState((prev) =>
+      prev
+        ? {
+            ...prev,
+            animatingCells: cellList
+          }
+        : prev
+    );
+
+    const timer = setTimeout(() => {
+      setGameState((prev) => {
+        if (!prev || prev.phase !== "exploding") {
+          return prev;
+        }
+        const prevBoard = prev.board;
+        const result = resolveBoard(prevBoard);
+        const prevPositionsMap = mapPositions(prevBoard);
+        const prevIds = new Set(Object.keys(prevPositionsMap));
+        const nextNewIds = new Set<string>();
+        result.board.forEach((row) => {
+          row.forEach((tile) => {
+            if (!prevIds.has(tile.id)) {
+              nextNewIds.add(tile.id);
+            }
+          });
+        });
+
+        setPreviousPositions(prevPositionsMap);
+        setNewTileIds(nextNewIds);
+
+        return {
+          ...prev,
+          board: result.board,
+          score: prev.score + result.matchedCount * 10,
+          phase: "gravity",
+          animatingCells: []
+        };
+      });
+      setExplodingCells(new Set());
+    }, EXPLOSION_DURATION);
+
+    return () => clearTimeout(timer);
+  }, [gameState?.phase, gameState?.board]);
+
+  useEffect(() => {
+    if (!gameState || gameState.phase !== "gravity") {
+      return;
+    }
+
+    const offsets: TileOffsets = {};
+    gameState.board.forEach((row, rowIndex) => {
+      row.forEach((tile, colIndex) => {
+        const prev = previousPositions[tile.id];
+        if (prev) {
+          const deltaX = prev.col - colIndex;
+          const deltaY = prev.row - rowIndex;
+          if (deltaX !== 0 || deltaY !== 0) {
+            offsets[tile.id] = { x: deltaX, y: deltaY };
+          }
+        }
+      });
+    });
+
+    setTileOffsets(offsets);
+    const raf = requestAnimationFrame(() => setTileOffsets({}));
+    const timer = setTimeout(() => {
+      setGameState((prev) =>
+        prev && prev.phase === "gravity"
+          ? {
+              ...prev,
+              phase: "spawning"
+            }
+          : prev
+      );
+    }, GRAVITY_DURATION);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+    };
+  }, [gameState?.phase, gameState?.board, previousPositions]);
+
+  useEffect(() => {
+    if (!gameState || gameState.phase !== "spawning") {
+      return;
+    }
+
+    const offsets: TileOffsets = {};
+    gameState.board.forEach((row, rowIndex) => {
+      row.forEach((tile) => {
+        if (newTileIds.has(tile.id)) {
+          offsets[tile.id] = { x: 0, y: -1 - rowIndex };
+        }
+      });
+    });
+
+    setIsSpawningStart(true);
+    setTileOffsets(offsets);
+    const raf = requestAnimationFrame(() => {
+      setTileOffsets({});
+      setIsSpawningStart(false);
+    });
+
+    const timer = setTimeout(() => {
+      const matches = findMatches(gameState.board);
+      if (matches.size > 0) {
+        setGameState((prev) =>
+          prev
+            ? {
+                ...prev,
+                phase: "exploding"
+              }
+            : prev
+        );
+        return;
+      }
+
+      setGameState((prev) => {
+        if (!prev) {
+          return prev;
+        }
+        const cleared = activeLevel
+          ? checkClearCondition(prev.score, activeLevel)
+          : false;
+        const failed = !cleared && prev.movesLeft <= 0;
+        const nextStatus = cleared ? "clear" : failed ? "fail" : "playing";
+        return {
+          ...prev,
+          phase: "idle",
+          status: nextStatus
+        };
+      });
+    }, SPAWN_DURATION);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+    };
+  }, [activeLevel, gameState?.phase, gameState?.board, newTileIds]);
+
+  useEffect(() => {
+    if (!gameState || !activeLevel) {
+      return;
+    }
+
+    if (gameState.status === "clear") {
+      updateProgressOnClear(activeLevel, gameState.score + gameState.movesLeft * 50);
+    }
+  }, [activeLevel, gameState?.status, gameState?.score, gameState?.movesLeft]);
+
+  const explodingLookup = useMemo(() => {
+    const lookup = new Set<string>();
+    explodingCells.forEach((key) => lookup.add(key));
+    return lookup;
+  }, [explodingCells]);
+
+  const isAnimating = Boolean(gameState && gameState.phase !== "idle");
 
   return (
     <main>
@@ -259,16 +579,25 @@ export default function Home() {
                   row.map((tile, colIndex) => {
                     const isSelected =
                       selected?.row === rowIndex && selected?.col === colIndex;
-                    const className = `tile ${tile.color} ${
-                      isSelected ? "selected" : ""
-                    }`;
+                    const explodeKey = `${rowIndex}-${colIndex}`;
+                    const isExploding = explodingLookup.has(explodeKey);
+                    const isPendingSpawn =
+                      gameState.phase === "gravity" && newTileIds.has(tile.id);
+                    const isSpawning = isSpawningStart && newTileIds.has(tile.id);
                     return (
-                      <button
+                      <TileView
                         key={tile.id}
-                        type="button"
-                        className={className}
+                        tile={tile}
+                        row={rowIndex}
+                        col={colIndex}
+                        phase={gameState.phase}
+                        isExploding={isExploding}
+                        isSelected={isSelected}
+                        isPendingSpawn={isPendingSpawn}
+                        isSpawning={isSpawning}
+                        offset={tileOffsets[tile.id]}
                         onClick={() => handleTileClick(rowIndex, colIndex)}
-                        aria-label={`Tile ${tile.color}`}
+                        isDisabled={Boolean(isAnimating) || gameState.status !== "playing"}
                       />
                     );
                   })
